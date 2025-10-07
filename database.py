@@ -25,7 +25,33 @@ class Db:
     async def add_user(self, id, name):
         user = self.new_user(id, name)
         await self.col.insert_one(user)
-
+# في database.py
+#class Db:
+    # ... الدوال الحالية ...
+    
+    async def get_word_replacements(self, user_id):
+        user = await self.col.find_one({'id': int(user_id)})
+        if not user:
+            return {}
+        return user.get('word_replacements', {})
+    
+    async def update_word_replacements(self, user_id, replacements):
+        await self.col.update_one(
+            {'id': user_id}, 
+            {'$set': {'word_replacements': replacements}}
+        )
+    
+    async def get_words_to_delete(self, user_id):
+        user = await self.col.find_one({'id': int(user_id)})
+        if not user:
+            return []
+        return user.get('words_to_delete', [])
+    
+    async def update_words_to_delete(self, user_id, words):
+        await self.col.update_one(
+            {'id': user_id}, 
+            {'$set': {'words_to_delete': words}}
+        )
     async def is_user_exist(self, id):
         user = await self.col.find_one({'id':int(id)})
         return bool(user)
@@ -76,7 +102,7 @@ class Db:
 
     async def update_configs(self, id, configs):
         await self.col.update_one({'id': int(id)}, {'$set': {'configs': configs}})
-
+# في database.py
     async def get_configs(self, id):
         default = {
             'caption': None,
@@ -89,6 +115,8 @@ class Db:
             'protect': None,
             'button': None,
             'db_uri': None,
+            'word_replacements': {},  # إضافة قاموس لاستبدال الكلمات
+            'words_to_delete': [],    # إضافة قائمة لحذف الكلمات
             'filters': {
                'poll': True,
                'text': True,
@@ -105,6 +133,7 @@ class Db:
         if user:
             return user.get('configs', default)
         return default 
+
 
     async def add_bot(self, datas):
        if not await self.is_bot_exist(datas['user_id']):
