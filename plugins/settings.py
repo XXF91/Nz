@@ -15,7 +15,125 @@ CLIENT = CLIENT()
 # Don't Remove Credit Tg - @VJ_Botz
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
-
+# في plugins/settings.py
+@Client.on_callback_query(filters.regex(r'^settings'))
+async def settings_query(bot, query):
+  user_id = query.from_user.id
+  i, type = query.data.split("#")
+  buttons = [[InlineKeyboardButton('back', callback_data="settings#main")]]
+  
+  # ... الكود الحالي ...
+  
+  elif type == "word_replace":
+     replacements = await db.get_word_replacements(user_id)
+     text = "<b>🔄 استبدال الكلمات</b>\n\n"
+     
+     if replacements:
+         text += "<b>الكلمات الحالية:</b>\n"
+         for old_word, new_word in replacements.items():
+             text += f"• <code>{old_word}</code> → <code>{new_word}</code>\n"
+     else:
+         text += "لم تتم إضافة أي كلمات للاستبدال بعد."
+     
+     buttons = [
+         [InlineKeyboardButton('➕ إضافة استبدال', callback_data="settings#add_word_replace")],
+         [InlineKeyboardButton('🗑️ حذف الكل', callback_data="settings#clear_word_replace")],
+         [InlineKeyboardButton('رجوع', callback_data="settings#main")]
+     ]
+     
+     await query.message.edit_text(
+         text,
+         reply_markup=InlineKeyboardMarkup(buttons)
+     )
+  
+  elif type == "word_delete":
+     words_to_delete = await db.get_words_to_delete(user_id)
+     text = "<b>🗑️ حذف الكلمات</b>\n\n"
+     
+     if words_to_delete:
+         text += "<b>الكلمات المحذوفة:</b>\n"
+         for word in words_to_delete:
+             text += f"• <code>{word}</code>\n"
+     else:
+         text += "لم تتم إضافة أي كلمات للحذف بعد."
+     
+     buttons = [
+         [InlineKeyboardButton('➕ إضافة كلمة', callback_data="settings#add_word_delete")],
+         [InlineKeyboardButton('🗑️ حذف الكل', callback_data="settings#clear_word_delete")],
+         [InlineKeyboardButton('رجوع', callback_data="settings#main")]
+     ]
+     
+     await query.message.edit_text(
+         text,
+         reply_markup=InlineKeyboardMarkup(buttons)
+     )
+  
+  elif type == "add_word_replace":
+     await query.message.delete()
+     msg = await bot.ask(
+         user_id,
+         "أرسل الكلمة المراد استبدالها والكلمة الجديدة بالصيغة التالية:\n\n"
+         "<code>الكلمة_القديمة|الكلمة_الجديدة</code>\n\n"
+         "مثال: <code>فيلم|movie</code>\n\n"
+         "/cancel - إلغاء العملية"
+     )
+     
+     if msg.text == "/cancel":
+         return await msg.reply("تم إلغاء العملية.")
+     
+     if "|" not in msg.text:
+         return await msg.reply("❌ صيغة غير صحيحة. يرجى استخدام الصيغة: الكلمة_القديمة|الكلمة_الجديدة")
+     
+     old_word, new_word = msg.text.split("|", 1)
+     old_word = old_word.strip()
+     new_word = new_word.strip()
+     
+     if not old_word or not new_word:
+         return await msg.reply("❌ يجب تحديد كلمتين (القديمة والجديدة)")
+     
+     replacements = await db.get_word_replacements(user_id)
+     replacements[old_word] = new_word
+     await db.update_word_replacements(user_id, replacements)
+     
+     await msg.reply(f"✅ تم إضافة الاستبدال: <code>{old_word}</code> → <code>{new_word}</code>")
+  
+  elif type == "add_word_delete":
+     await query.message.delete()
+     msg = await bot.ask(
+         user_id,
+         "أرسل الكلمات التي تريد حذفها من الوصف (يمكن إرسال عدة كلمات مفصولة بمسافة):\n\n"
+         "مثال: <code>فيلم movie حصري</code>\n\n"
+         "/cancel - إلغاء العملية"
+     )
+     
+     if msg.text == "/cancel":
+         return await msg.reply("تم إلغاء العملية.")
+     
+     words = msg.text.split()
+     if not words:
+         return await msg.reply("❌ يجب إدخال كلمة واحدة على الأقل")
+     
+     current_words = await db.get_words_to_delete(user_id)
+     current_words.extend(words)
+     # إزالة التكرارات
+     current_words = list(set(current_words))
+     await db.update_words_to_delete(user_id, current_words)
+     
+     await msg.reply(f"✅ تم إضافة {len(words)} كلمات للحذف")
+  
+  elif type == "clear_word_replace":
+     await db.update_word_replacements(user_id, {})
+     await query.message.edit_text(
+         "✅ تم حذف جميع استبدالات الكلمات",
+         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('رجوع', callback_data="settings#word_replace")]])
+     )
+  
+  elif type == "clear_word_delete":
+     await db.update_words_to_delete(user_id, [])
+     await query.message.edit_text(
+         "✅ تم حذف جميع الكلمات المحذوفة",
+         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('رجوع', callback_data="settings#word_delete")]])
+     )
 @Client.on_message(filters.command('settings'))
 async def settings(client, message):
    await message.reply_text(
@@ -487,6 +605,7 @@ def extra_buttons():
 # Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
+# في plugins/settings.py
 def main_buttons():
   buttons = [[
        InlineKeyboardButton('🤖 Bᴏᴛs',
@@ -498,6 +617,11 @@ def main_buttons():
                     callback_data=f'settings#caption'),
        InlineKeyboardButton('⏹ Bᴜᴛᴛᴏɴ',
                     callback_data=f'settings#button')
+       ],[
+       InlineKeyboardButton('🔄 استبدال الكلمات',
+                    callback_data=f'settings#word_replace'),
+       InlineKeyboardButton('🗑️ حذف الكلمات',
+                    callback_data=f'settings#word_delete')
        ],[
        InlineKeyboardButton('🕵‍♀ Fɪʟᴛᴇʀs 🕵‍♀',
                     callback_data=f'settings#filters'),
