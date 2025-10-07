@@ -1,6 +1,4 @@
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+
 
 import time as tm
 from database import Db, db
@@ -42,7 +40,7 @@ class STS:
     def divide(self, no, by):
        by = 1 if int(by) == 0 else by 
        return int(no) / by 
-
+ 
     async def get_data(self, user_id):
         bot = await db.get_bot(user_id)
         if bot is None:
@@ -60,9 +58,18 @@ class STS:
            min = 0
            max = 0
         button = parse_buttons(configs['button'] if configs['button'] else '')
-        return bot, configs['caption'], configs['forward_tag'], {'filters': filters,
-                'keywords': configs['keywords'], 'min_size': min, 'max_size': max, 'extensions': configs['extension'], 'skip_duplicate': duplicate, 'db_uri': configs['db_uri']}, configs['protect'], button
-
-# Don't Remove Credit Tg - @VJ_Botz
-# Subscribe YouTube Channel For Amazing Bot https://youtube.com/@Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+        # إضافة الإعدادات الجديدة
+        word_replacements = configs.get('word_replacements', {})
+        words_to_delete = configs.get('words_to_delete', [])
+        
+        return bot, configs['caption'], configs['forward_tag'], {
+            'filters': filters,
+            'keywords': configs['keywords'], 
+            'min_size': min, 
+            'max_size': max, 
+            'extensions': configs['extension'], 
+            'skip_duplicate': duplicate, 
+            'db_uri': configs['db_uri'],
+            'word_replacements': word_replacements,
+            'words_to_delete': words_to_delete
+        }, configs['protect'], button
