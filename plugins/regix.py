@@ -1,5 +1,3 @@
-
-
 import os
 import sys 
 import math
@@ -26,7 +24,39 @@ logger.setLevel(logging.INFO)
 TEXT = Script.TEXT
 
 
-
+# في plugins/regix.py
+def custom_caption(msg, caption):
+  if msg.media:
+    if (msg.video or msg.document or msg.audio or msg.photo):
+      media = getattr(msg, msg.media.value, None)
+      if media:
+        file_name = getattr(media, 'file_name', '')
+        file_size = getattr(media, 'file_size', '')
+        fcaption = getattr(msg, 'caption', '')
+        if fcaption:
+          fcaption = fcaption.html
+        if caption:
+          formatted_caption = caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
+        else:
+          formatted_caption = fcaption
+        
+        # تطبيق استبدال الكلمات
+        if formatted_caption:
+          # الحصول على إعدادات المستخدم
+          user_id = msg.from_user.id if msg.from_user else None
+          if user_id:
+            # استبدال الكلمات
+            replacements = await db.get_word_replacements(user_id)
+            for old_word, new_word in replacements.items():
+              formatted_caption = formatted_caption.replace(old_word, new_word)
+            
+            # حذف الكلمات
+            words_to_delete = await db.get_words_to_delete(user_id)
+            for word in words_to_delete:
+              formatted_caption = formatted_caption.replace(word, "")
+        
+        return formatted_caption
+  return None
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
     user = message.from_user.id
@@ -289,21 +319,7 @@ async def send(bot, user, text):
 
 
 
-def custom_caption(msg, caption):
-  if msg.media:
-    if (msg.video or msg.document or msg.audio or msg.photo):
-      media = getattr(msg, msg.media.value, None)
-      if media:
-        file_name = getattr(media, 'file_name', '')
-        file_size = getattr(media, 'file_size', '')
-        fcaption = getattr(msg, 'caption', '')
-        if fcaption:
-          fcaption = fcaption.html
-        if caption:
-          return caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
-        return fcaption
-  return None
-
+#
 
 
 def get_size(size):
@@ -684,5 +700,3 @@ async def complete_time(total_files, files_per_minute=30):
     if seconds > 0:
         time_format += f"{int(seconds)}s"
     return time_format
-
-
