@@ -24,39 +24,9 @@ logger.setLevel(logging.INFO)
 TEXT = Script.TEXT
 
 
+
 # في plugins/regix.py
-def custom_caption(msg, caption):
-  if msg.media:
-    if (msg.video or msg.document or msg.audio or msg.photo):
-      media = getattr(msg, msg.media.value, None)
-      if media:
-        file_name = getattr(media, 'file_name', '')
-        file_size = getattr(media, 'file_size', '')
-        fcaption = getattr(msg, 'caption', '')
-        if fcaption:
-          fcaption = fcaption.html
-        if caption:
-          formatted_caption = caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
-        else:
-          formatted_caption = fcaption
-        
-        # تطبيق استبدال الكلمات
-        if formatted_caption:
-          # الحصول على إعدادات المستخدم
-          user_id = msg.from_user.id if msg.from_user else None
-          if user_id:
-            # استبدال الكلمات
-            replacements = await db.get_word_replacements(user_id)
-            for old_word, new_word in replacements.items():
-              formatted_caption = formatted_caption.replace(old_word, new_word)
-            
-            # حذف الكلمات
-            words_to_delete = await db.get_words_to_delete(user_id)
-            for word in words_to_delete:
-              formatted_caption = formatted_caption.replace(word, "")
-        
-        return formatted_caption
-  return None
+
 @Client.on_callback_query(filters.regex(r'^start_public'))
 async def pub_(bot, message):
     user = message.from_user.id
@@ -78,6 +48,9 @@ async def pub_(bot, message):
     min_size = datas['min_size']
     keyword = datas['keywords']
     exten = datas['extensions']
+    # الحصول على إعدادات استبدال وحذف الكلمات
+    word_replacements = datas.get('word_replacements', {})
+    words_to_delete = datas.get('words_to_delete', [])
     keywords = ""
     extensions = ""
     if keyword:
@@ -126,7 +99,7 @@ async def pub_(bot, message):
             user_have_db = True
     temp.forwardings += 1
     await db.add_frwd(user)
-    await send(client, user, "<b>Fᴏʀᴡᴀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
+    await send(client, user, "<b>Fᴏʀᴡᴀʀᴅɪɴɢ sᴛᴀʀᴛᴇᴅ🔥</b>")
     sts.add(time=True)
     sleep = 1 if _bot['is_bot'] else 10
     await msg_edit(m, "<code>processing...</code>") 
@@ -184,7 +157,14 @@ async def pub_(bot, message):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = custom_caption(message, caption)
+                   # تمرير user_id إلى دالة custom_caption
+                   new_caption = await custom_caption(message, caption, user)
+                   # تطبيق استبدال وحذف الكلمات إذا لم يتم تطبيقها في custom_caption
+                   if new_caption:
+                       for old_word, new_word in word_replacements.items():
+                           new_caption = new_caption.replace(old_word, new_word)
+                       for word in words_to_delete:
+                           new_caption = new_caption.replace(word, "")
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
@@ -198,7 +178,7 @@ async def pub_(bot, message):
             temp.IS_FRWD_CHAT.remove(sts.TO)
             return await stop(client, user)
         temp.IS_FRWD_CHAT.remove(sts.TO)
-        await send(client, user, "<b>🎉 ғᴏʀᴡᴀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+        await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
         await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
         if user_have_db:
             await user_db.drop_all()
@@ -207,20 +187,55 @@ async def pub_(bot, message):
 
 
 
+# في plugins/regix.py
+
+# تحديث دالة copy لتكون غير متزامنة وتستدعي custom_caption بشكل صحيح
 async def copy(user, bot, msg, m, sts):
    try:                               
      if msg.get("media") and msg.get("caption"):
+        # تطبيق الفلاتر على الوصف قبل الإرسال
+        caption = msg.get("caption")
+        if caption:
+            # الحصول على إعدادات المستخدم
+            user_configs = await db.get_configs(user)
+            
+            # استبدال الكلمات
+            word_replacements = user_configs.get('word_replacements', {})
+            for old_word, new_word in word_replacements.items():
+                caption = caption.replace(old_word, new_word)
+            
+            # حذف الكلمات
+            words_to_delete = user_configs.get('words_to_delete', [])
+            for word in words_to_delete:
+                caption = caption.replace(word, "")
+        
         await bot.send_cached_media(
               chat_id=sts.get('TO'),
               file_id=msg.get("media"),
-              caption=msg.get("caption"),
+              caption=caption,
               reply_markup=msg.get('button'),
               protect_content=msg.get("protect"))
      else:
+        # تطبيق الفلاتر على الوصف قبل الإرسال
+        caption = msg.get("caption")
+        if caption:
+            # الحصول على إعدادات المستخدم
+            user_configs = await db.get_configs(user)
+            
+            # استبدال الكلمات
+            word_replacements = user_configs.get('word_replacements', {})
+            for old_word, new_word in word_replacements.items():
+                caption = caption.replace(old_word, new_word)
+            
+            # حذف الكلمات
+            words_to_delete = user_configs.get('words_to_delete', [])
+            for word in words_to_delete:
+                caption = caption.replace(word, "")
+        
         await bot.copy_message(
               chat_id=sts.get('TO'),
               from_chat_id=sts.get('FROM'),    
-              caption=msg.get("caption"),
+              caption=caption,
               message_id=msg.get("msg_id"),
               reply_markup=msg.get('button'),
               protect_content=msg.get("protect"))
@@ -319,7 +334,39 @@ async def send(bot, user, text):
 
 
 
-#
+# في plugins/regix.py
+
+# تعديل دالة custom_caption لتكون غير متزامنة
+async def custom_caption(msg, caption, user_id=None):
+  if msg.media:
+    if (msg.video or msg.document or msg.audio or msg.photo):
+      media = getattr(msg, msg.media.value, None)
+      if media:
+        file_name = getattr(media, 'file_name', '')
+        file_size = getattr(media, 'file_size', '')
+        fcaption = getattr(msg, 'caption', '')
+        if fcaption:
+          fcaption = fcaption.html
+        if caption:
+          formatted_caption = caption.format(filename=file_name, size=get_size(file_size), caption=fcaption)
+        else:
+          formatted_caption = fcaption
+        
+        # تطبيق استبدال الكلمات
+        if formatted_caption and user_id:
+          # الحصول على إعدادات المستخدم
+          # استبدال الكلمات
+          replacements = await db.get_word_replacements(user_id)
+          for old_word, new_word in replacements.items():
+            formatted_caption = formatted_caption.replace(old_word, new_word)
+          
+          # حذف الكلمات
+          words_to_delete = await db.get_words_to_delete(user_id)
+          for word in words_to_delete:
+            formatted_caption = formatted_caption.replace(word, "")
+        
+        return formatted_caption
+  return None
 
 
 def get_size(size):
@@ -447,6 +494,8 @@ async def stop_forward(client, message):
 
 
 
+# في plugins/regix.py
+
 async def restart_pending_forwads(bot, user):
     user = user['user_id']
     settings = await db.get_forward_details(user)
@@ -475,6 +524,9 @@ async def restart_pending_forwads(bot, user):
        min_size = datas['min_size']
        keyword = datas['keywords']
        exten = datas['extensions']
+       # الحصول على إعدادات استبدال وحذف الكلمات
+       word_replacements = datas.get('word_replacements', {})
+       words_to_delete = datas.get('words_to_delete', [])
        keywords = ""
        extensions = ""
        if keyword:
@@ -592,7 +644,14 @@ async def restart_pending_forwads(bot, user):
                       await asyncio.sleep(10)
                       MSG = []
                 else:
-                   new_caption = custom_caption(message, caption)
+                   # تمرير user_id إلى دالة custom_caption
+                   new_caption = await custom_caption(message, caption, user)
+                   # تطبيق استبدال وحذف الكلمات إذا لم يتم تطبيقها في custom_caption
+                   if new_caption:
+                       for old_word, new_word in word_replacements.items():
+                           new_caption = new_caption.replace(old_word, new_word)
+                       for word in words_to_delete:
+                           new_caption = new_caption.replace(word, "")
                    details = {"msg_id": message.id, "media": media(message), "caption": new_caption, 'button': button, "protect": protect}
                    await copy(user, client, details, m, sts)
                    sts.add('total_files')
@@ -605,13 +664,12 @@ async def restart_pending_forwads(bot, user):
             temp.IS_FRWD_CHAT.remove(sts.TO)
             return await stop(client, user)
         temp.IS_FRWD_CHAT.remove(sts.TO)
-        await send(client, user, "<b>🎉 ғᴏʀᴡᴀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
+        await send(client, user, "<b>🎉 ғᴏʀᴡᴀʀᴅɪɴɢ ᴄᴏᴍᴘʟᴇᴛᴇᴅ</b>")
         if user_have_db:
             await user_db.drop_all()
             await user_db.close()
         await edit(user, m, 'ᴄᴏᴍᴘʟᴇᴛᴇᴅ', "completed", sts) 
         await stop(client, user)
-
 
 
 async def store_vars(user_id):
